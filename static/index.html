@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מצב שטח | War Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&family=Rubik:wght@300;400;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --red: #ff2020; --red-dim: rgba(255,32,32,0.12);
+  --orange: #ff8c00; --yellow: #ffd000;
+  --green: #00e5a0; --blue: #00aaff;
+  --bg: #05080a; --bg2: #0a1015; --bg3: #0f171d;
+  --border: #162028; --text: #c0d8e4; --dim: #3a5565;
+  --mono: 'Share Tech Mono', monospace;
+  --body: 'Rubik', sans-serif;
+  --display: 'Bebas Neue', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--body); min-height: 100vh; overflow-x: hidden; }
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9997;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.05) 3px, rgba(0,0,0,0.05) 4px);
+}
+
+/* HEADER */
+header {
+  position: sticky; top: 0; z-index: 200;
+  background: rgba(5,8,10,0.96); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  align-items: center; padding: 0 2rem; height: 72px;
+}
+.logo { display: flex; align-items: center; gap: 14px; }
+.logo-pulse { position: relative; width: 14px; height: 14px; }
+.logo-pulse::before, .logo-pulse::after { content: ''; position: absolute; inset: 0; border-radius: 50%; }
+.logo-pulse::before { background: var(--red); animation: pDot 1.5s infinite; }
+.logo-pulse::after  { border: 2px solid var(--red); animation: pRing 1.5s infinite; opacity: 0; }
+@keyframes pDot  { 0%,100%{transform:scale(1)}50%{transform:scale(1.2)} }
+@keyframes pRing { 0%{transform:scale(1);opacity:.8}100%{transform:scale(2.5);opacity:0} }
+.logo-he { font-family: var(--display); font-size: 1.8rem; letter-spacing: 4px; color: #fff; line-height: 1; }
+.logo-en { font-family: var(--mono); font-size: 0.6rem; color: var(--dim); letter-spacing: 3px; margin-top: 2px; }
+
+.threat-meter { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.threat-lbl   { font-family: var(--mono); font-size: 0.6rem; color: var(--dim); letter-spacing: 3px; }
+.threat-bar   { display: flex; gap: 3px; }
+.seg { width: 24px; height: 6px; border-radius: 2px; background: var(--border); transition: background .5s; }
+.seg.a1 { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+.seg.a2 { background: var(--orange); box-shadow: 0 0 6px var(--orange); }
+.seg.a3 { background: var(--red);    box-shadow: 0 0 8px var(--red); animation: flicker 2s infinite; }
+@keyframes flicker { 0%,100%{opacity:1}50%{opacity:.6} }
+.threat-val { font-family: var(--mono); font-size: .65rem; color: var(--red); letter-spacing: 2px; }
+
+.hdr-right { display: flex; align-items: center; justify-content: flex-end; gap: 1.2rem; }
+.lang-toggle { display: flex; background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+.lang-btn { font-family: var(--mono); font-size: .7rem; letter-spacing: 1px; padding: 5px 12px; cursor: pointer; border: none; background: none; color: var(--dim); transition: all .2s; }
+.lang-btn.active { background: var(--green); color: #000; font-weight: 700; }
+.clock { font-family: var(--mono); font-size: 1rem; color: var(--green); letter-spacing: 3px; }
+.notif-btn {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 4px;
+  padding: 6px 12px; cursor: pointer; font-family: var(--mono); font-size: .7rem;
+  color: var(--dim); letter-spacing: 1px; transition: all .2s; display: flex; align-items: center; gap: 6px;
+}
+.notif-btn:hover, .notif-btn.active { border-color: var(--green); color: var(--green); background: rgba(0,229,160,.08); }
+
+/* TICKER */
+.ticker-wrap { background: var(--red); height: 32px; overflow: hidden; display: flex; align-items: center; }
+.ticker-tag  { flex-shrink: 0; background: #000; color: var(--red); font-family: var(--display); font-size: 1rem; letter-spacing: 3px; padding: 0 16px; height: 100%; display: flex; align-items: center; }
+.ticker-scroll { overflow: hidden; flex: 1; }
+.ticker-inner  { display: inline-block; white-space: nowrap; animation: tScroll 55s linear infinite; }
+.ticker-item   { font-family: var(--mono); font-size: .75rem; color: #fff; margin: 0 2.5rem; letter-spacing: .5px; }
+.ticker-item::before { content: '◆ '; font-size: .5rem; opacity: .7; }
+@keyframes tScroll { from{transform:translateX(60vw)} to{transform:translateX(-100%)} }
+
+/* LAYOUT */
+.layout { display: grid; grid-template-columns: 1fr 380px; min-height: calc(100vh - 106px); }
+
+/* FEED */
+.feed-panel { border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+.feed-hdr {
+  padding: 1.2rem 1.8rem; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; background: var(--bg2);
+}
+.feed-title { font-family: var(--display); font-size: 1.1rem; letter-spacing: 4px; color: var(--dim); }
+.tabs { display: flex; background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+.tab { font-family: var(--mono); font-size: .65rem; letter-spacing: 1px; padding: 6px 14px; cursor: pointer; background: none; border: none; color: var(--dim); transition: all .15s; }
+.tab.active      { background: var(--bg); color: var(--text); }
+.tab.tr.active   { color: var(--red);    box-shadow: inset 0 -2px 0 var(--red); }
+.tab.to.active   { color: var(--orange); box-shadow: inset 0 -2px 0 var(--orange); }
+.tab.ty.active   { color: var(--yellow); box-shadow: inset 0 -2px 0 var(--yellow); }
+.live-dot { width: 8px; height: 8px; background: var(--red); border-radius: 50%; animation: pDot 1.5s infinite; }
+
+/* Loading */
+.loading { padding: 3rem; text-align: center; }
+.loading-spinner { width: 32px; height: 32px; border: 2px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 1rem; }
+@keyframes spin { to{transform:rotate(360deg)} }
+.loading-text { font-family: var(--mono); font-size: .75rem; color: var(--dim); letter-spacing: 2px; }
+
+.feed-list { flex: 1; overflow-y: auto; }
+.feed-list::-webkit-scrollbar { width: 4px; }
+.feed-list::-webkit-scrollbar-track { background: var(--bg); }
+.feed-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ARTICLE */
+.article {
+  display: grid; grid-template-columns: 3px 56px 1fr; gap: 0 1rem;
+  padding: 1.1rem 1.5rem 1.1rem 1.2rem; border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background .15s; animation: slideUp .3s ease both;
+}
+.article:hover { background: var(--bg2); }
+@keyframes slideUp { from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)} }
+.a-bar { border-radius: 2px; align-self: stretch; }
+.lv3 .a-bar { background: linear-gradient(180deg, var(--red), rgba(255,32,32,.3)); }
+.lv2 .a-bar { background: linear-gradient(180deg, var(--orange), rgba(255,140,0,.3)); }
+.lv1 .a-bar { background: linear-gradient(180deg, var(--yellow), rgba(255,208,0,.3)); }
+.a-icon { width:40px;height:40px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;align-self:start;margin-top:2px; }
+.lv3 .a-icon { background: var(--red-dim); border: 1px solid rgba(255,32,32,.2); }
+.lv2 .a-icon { background: rgba(255,140,0,.1); border: 1px solid rgba(255,140,0,.2); }
+.lv1 .a-icon { background: rgba(255,208,0,.08); border: 1px solid rgba(255,208,0,.2); }
+.a-top { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; flex-wrap: wrap; }
+.chip { font-family: var(--mono); font-size: .6rem; letter-spacing: 1px; padding: 2px 7px; border-radius: 2px; text-transform: uppercase; }
+.cr { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,32,32,.25); }
+.co { background: rgba(255,140,0,.1); color: var(--orange); border: 1px solid rgba(255,140,0,.25); }
+.cy { background: rgba(255,208,0,.08); color: var(--yellow); border: 1px solid rgba(255,208,0,.2); }
+.cb { background: rgba(0,170,255,.08); color: var(--blue); border: 1px solid rgba(0,170,255,.2); }
+.a-source { font-family: var(--mono); font-size: .62rem; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; }
+.a-time   { font-family: var(--mono); font-size: .62rem; color: var(--dim); margin-right: auto; }
+.a-title  { font-size: .92rem; font-weight: 700; line-height: 1.45; color: #ddeef7; margin-bottom: 5px; }
+.a-desc   { font-size: .78rem; color: var(--dim); line-height: 1.55; margin-bottom: 6px; }
+.a-link   { font-family: var(--mono); font-size: .62rem; color: var(--green); text-decoration: none; letter-spacing: 1px; transition: opacity .15s; }
+.a-link:hover { opacity: .75; }
+
+/* SIDEBAR */
+.sidebar { display: flex; flex-direction: column; background: var(--bg); }
+.s-block { padding: 1.2rem 1.4rem; border-bottom: 1px solid var(--border); }
+.s-title { font-family: var(--mono); font-size: .62rem; letter-spacing: 3px; text-transform: uppercase; color: var(--dim); margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; }
+
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; text-align: center; transition: border-color .3s; }
+.stat-card:hover { border-color: var(--green); }
+.stat-num { font-family: var(--display); font-size: 2.2rem; line-height: 1; transition: transform .2s; }
+.stat-num.bump { transform: scale(1.3); }
+.stat-lbl { font-family: var(--mono); font-size: .58rem; color: var(--dim); letter-spacing: 2px; margin-top: 3px; }
+
+.search-row { display: flex; gap: 8px; }
+.s-input { flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:.78rem;padding:8px 12px;border-radius:4px;outline:none;transition:border-color .2s;text-align:right; }
+.s-input::placeholder { color: var(--dim); }
+.s-input:focus { border-color: var(--green); box-shadow: 0 0 0 2px rgba(0,229,160,.1); }
+.s-btn { background:var(--green);color:#000;border:none;font-family:var(--mono);font-size:.72rem;font-weight:700;padding:8px 14px;border-radius:4px;cursor:pointer;letter-spacing:1px;transition:opacity .2s;flex-shrink:0; }
+.s-btn:hover { opacity: .85; }
+.search-count { font-family:var(--mono);font-size:.65rem;color:var(--green);margin-top:6px;display:none; }
+
+.zone-list { display: flex; flex-direction: column; gap: 5px; }
+.zone-row { display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:4px;background:var(--bg2);border-right:3px solid transparent;transition:background .15s; }
+.zone-row:hover { background: var(--bg3); }
+.zone-row.red    { border-color: var(--red); }
+.zone-row.orange { border-color: var(--orange); }
+.zone-row.yellow { border-color: var(--yellow); }
+.z-name { font-size:.8rem;font-weight:700; }
+.z-sec  { font-family:var(--mono);font-size:.65rem;color:var(--dim); }
+
+.src-grid { display:flex;flex-wrap:wrap;gap:6px; }
+.src-tag { font-family:var(--mono);font-size:.6rem;letter-spacing:1px;padding:3px 9px;border-radius:3px;background:rgba(0,229,160,.07);color:var(--green);border:1px solid rgba(0,229,160,.2);display:flex;align-items:center;gap:5px; }
+.src-tag::before { content:'●';font-size:.4rem;animation:pDot 2s infinite; }
+
+.emerg-list { display:flex;flex-direction:column;gap:6px; }
+.emerg-row { display:flex;align-items:center;justify-content:space-between;font-size:.82rem; }
+.emerg-num { font-family:var(--mono);font-weight:700;color:var(--green);font-size:.9rem; }
+
+/* TOAST */
+.toast { position:fixed;bottom:2rem;left:2rem;background:var(--bg2);border:1px solid var(--red);border-left:5px solid var(--red);padding:14px 18px;max-width:380px;min-width:280px;border-radius:6px;box-shadow:0 8px 32px rgba(0,0,0,.5),0 0 20px rgba(255,32,32,.15);z-index:500;transform:translateY(120%);transition:transform .35s cubic-bezier(.34,1.56,.64,1); }
+.toast.show { transform: translateY(0); }
+.toast-hdr { display:flex;align-items:center;justify-content:space-between;margin-bottom:6px; }
+.toast-tag { font-family:var(--mono);font-size:.65rem;color:var(--red);letter-spacing:2px; }
+.toast-close { background:none;border:none;color:var(--dim);cursor:pointer;font-size:1rem;line-height:1;transition:color .15s; }
+.toast-close:hover { color: var(--text); }
+.toast-body { font-size:.82rem;line-height:1.5; }
+
+footer { background:var(--bg2);border-top:1px solid var(--border);padding:10px 2rem;display:flex;justify-content:space-between;align-items:center; }
+.footer-txt { font-family:var(--mono);font-size:.62rem;color:var(--dim);letter-spacing:1px; }
+
+@media (max-width:900px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  header { grid-template-columns: 1fr 1fr; height: auto; padding: 10px 1rem; }
+  .threat-meter { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-pulse"></div>
+    <div>
+      <div class="logo-he">מצב שטח</div>
+      <div class="logo-en">WAR MONITOR · LIVE</div>
+    </div>
+  </div>
+
+  <div class="threat-meter">
+    <div class="threat-lbl">THREAT LEVEL</div>
+    <div class="threat-bar">
+      <div class="seg a1"></div><div class="seg a1"></div>
+      <div class="seg a2"></div><div class="seg a2"></div>
+      <div class="seg a3"></div>
+    </div>
+    <div class="threat-val">HIGH</div>
+  </div>
+
+  <div class="hdr-right">
+    <div class="lang-toggle">
+      <button class="lang-btn active" id="btnHe" onclick="setLang('he')">עב</button>
+      <button class="lang-btn"        id="btnEn" onclick="setLang('en')">EN</button>
+    </div>
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="notif-btn" id="notifBtn" onclick="requestNotif()">
+      <span id="notifIcon">🔔</span><span id="notifTxt">התראות</span>
+    </button>
+  </div>
+</header>
+
+<div class="ticker-wrap">
+  <div class="ticker-tag">BREAKING</div>
+  <div class="ticker-scroll">
+    <div class="ticker-inner" id="ticker">
+      <span class="ticker-item">טוען חדשות...</span>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- FEED -->
+  <div class="feed-panel">
+    <div class="feed-hdr">
+      <div class="feed-title" id="feedTitle">עדכוני שטח</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="tabs">
+          <button class="tab active"   onclick="switchTab('all',this)">הכל</button>
+          <button class="tab tr"       onclick="switchTab('3',this)">🔴</button>
+          <button class="tab to"       onclick="switchTab('2',this)">🟠</button>
+          <button class="tab ty"       onclick="switchTab('1',this)">🟡</button>
+        </div>
+        <div class="live-dot"></div>
+      </div>
+    </div>
+    <div class="feed-list" id="feedList">
+      <div class="loading">
+        <div class="loading-spinner"></div>
+        <div class="loading-text" id="loadingTxt">טוען חדשות...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="s-block">
+      <div class="s-title">
+        <span id="sStatus">סטטוס</span>
+        <span id="lastUpd" style="font-size:.58rem;color:var(--dim)"></span>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-num" style="color:var(--red)"    id="sCrit">—</div><div class="stat-lbl" id="lblCrit">קריטי</div></div>
+        <div class="stat-card"><div class="stat-num" style="color:var(--orange)" id="sUrg">—</div><div class="stat-lbl" id="lblUrg">דחוף</div></div>
+        <div class="stat-card"><div class="stat-num" style="color:var(--yellow)" id="sReg">—</div><div class="stat-lbl" id="lblReg">רגיל</div></div>
+        <div class="stat-card"><div class="stat-num" style="color:var(--green)"  id="sTot">—</div><div class="stat-lbl" id="lblTot">סה"כ</div></div>
+      </div>
+    </div>
+
+    <div class="s-block">
+      <div class="s-title"><span id="sSearch">חיפוש</span></div>
+      <div class="search-row">
+        <input class="s-input" id="searchIn" placeholder="חפש נושא..." onkeydown="if(event.key==='Enter')doSearch()">
+        <button class="s-btn" id="searchBtnEl" onclick="doSearch()">חפש</button>
+      </div>
+      <div class="search-count" id="searchCount"></div>
+    </div>
+
+    <div class="s-block">
+      <div class="s-title"><span id="sZones">אזורי סכנה</span><span class="chip cr" style="font-size:.55rem">עדכון חי</span></div>
+      <div class="zone-list">
+        <div class="zone-row red">   <span class="z-name" id="z1">עוטף עזה</span>     <span class="z-sec">0–7 שנ'</span></div>
+        <div class="zone-row red">   <span class="z-name" id="z2">גליל עליון</span>   <span class="z-sec">0–15 שנ'</span></div>
+        <div class="zone-row orange"><span class="z-name" id="z3">חיפה והקריות</span> <span class="z-sec">30 שנ'</span></div>
+        <div class="zone-row orange"><span class="z-name" id="z4">ירושלים</span>       <span class="z-sec">60–90 שנ'</span></div>
+        <div class="zone-row orange"><span class="z-name" id="z5">גוש דן</span>        <span class="z-sec">60–90 שנ'</span></div>
+        <div class="zone-row yellow"><span class="z-name" id="z6">אילת ודרום</span>   <span class="z-sec">120+ שנ'</span></div>
+      </div>
+    </div>
+
+    <div class="s-block">
+      <div class="s-title"><span id="sSrc">מקורות פעילים</span></div>
+      <div class="src-grid">
+        <div class="src-tag">ynet</div><div class="src-tag">N12</div>
+        <div class="src-tag">Walla</div><div class="src-tag">הארץ</div>
+        <div class="src-tag">ToI</div><div class="src-tag">J.Post</div>
+        <div class="src-tag">Reuters</div>
+      </div>
+    </div>
+
+    <div class="s-block">
+      <div class="s-title"><span id="sEmerg">מספרי חירום</span></div>
+      <div class="emerg-list">
+        <div class="emerg-row"><span>🚑 <span id="e1">מד"א</span></span><span class="emerg-num">101</span></div>
+        <div class="emerg-row"><span>🚒 <span id="e2">כיבוי אש</span></span><span class="emerg-num">102</span></div>
+        <div class="emerg-row"><span>👮 <span id="e3">משטרה</span></span><span class="emerg-num">100</span></div>
+        <div class="emerg-row"><span>🏥 <span id="e4">מוקד ביטחוני</span></span><span class="emerg-num">1202</span></div>
+        <div style="margin-top:6px;font-family:var(--mono);font-size:.65rem;color:var(--dim)" id="eApp">אפליקציה: פיקוד העורף</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <div class="toast-hdr">
+    <span class="toast-tag">🔴 BREAKING</span>
+    <button class="toast-close" onclick="closeToast()">✕</button>
+  </div>
+  <div class="toast-body" id="toastBody"></div>
+</div>
+
+<footer>
+  <span class="footer-txt" id="footerL">מצב שטח © 2025 — RSS · NewsAPI</span>
+  <span class="footer-txt" id="footerR">רענון אוטומטי כל 5 דקות</span>
+</footer>
+
+<script>
+// ── TRANSLATIONS ──
+const T = {
+  he: {
+    feedTitle:'עדכוני שטח', status:'סטטוס', search:'חיפוש', zones:'אזורי סכנה',
+    sources:'מקורות פעילים', emerg:'מספרי חירום',
+    crit:'קריטי', urg:'דחוף', reg:'רגיל', tot:'סה"כ',
+    notif:'התראות', notifOn:'פעיל ✓',
+    ph:'חפש נושא...', sbtn:'חפש',
+    z:['עוטף עזה','גליל עליון','חיפה והקריות','ירושלים','גוש דן','אילת ודרום'],
+    e:['מד"א','כיבוי אש','משטרה','מוקד ביטחוני'],
+    eApp:'אפליקציה: פיקוד העורף',
+    readMore:'קרא עוד ↗', loading:'טוען חדשות...',
+    noRes:'אין תוצאות', footL:'מצב שטח © 2025 — RSS · NewsAPI',
+    footR:'רענון אוטומטי כל 5 דקות', lastUpd:'עודכן',
+    found:(n,q)=>`נמצאו ${n} תוצאות עבור "${q}"`,
+    lvl:['','רגיל','דחוף','קריטי'], err:'שגיאה בטעינה'
+  },
+  en: {
+    feedTitle:'Live Updates', status:'Status', search:'Search', zones:'Danger Zones',
+    sources:'Active Sources', emerg:'Emergency Numbers',
+    crit:'Critical', urg:'Urgent', reg:'Regular', tot:'Total',
+    notif:'Alerts', notifOn:'Active ✓',
+    ph:'Search topic...', sbtn:'Search',
+    z:['Gaza Envelope','Upper Galilee','Haifa Area','Jerusalem','Gush Dan','Eilat & South'],
+    e:['MDA','Fire Dept.','Police','Security Hotline'],
+    eApp:'App: Home Front Command',
+    readMore:'Read more ↗', loading:'Loading news...',
+    noRes:'No results found', footL:'War Monitor © 2025 — RSS · NewsAPI',
+    footR:'Auto-refresh every 5 minutes', lastUpd:'Updated',
+    found:(n,q)=>`${n} results for "${q}"`,
+    lvl:['','Regular','Urgent','Critical'], err:'Error loading'
+  }
+};
+
+let lang = 'he', filter = 'all', notifGranted = false;
+let allArticles = [], seenUrls = new Set();
+
+// ── CLOCK ──
+function tick() {
+  const n = new Date();
+  document.getElementById('clock').textContent =
+    `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
+}
+setInterval(tick, 1000); tick();
+
+// ── LANG ──
+function setLang(l) {
+  lang = l;
+  document.documentElement.lang = l;
+  document.documentElement.dir = l === 'he' ? 'rtl' : 'ltr';
+  document.getElementById('btnHe').classList.toggle('active', l==='he');
+  document.getElementById('btnEn').classList.toggle('active', l==='en');
+  const t = T[l];
+  document.getElementById('feedTitle').textContent    = t.feedTitle;
+  document.getElementById('sStatus').textContent      = t.status;
+  document.getElementById('sSearch').textContent      = t.search;
+  document.getElementById('sZones').textContent       = t.zones;
+  document.getElementById('sSrc').textContent         = t.sources;
+  document.getElementById('sEmerg').textContent       = t.emerg;
+  document.getElementById('lblCrit').textContent      = t.crit;
+  document.getElementById('lblUrg').textContent       = t.urg;
+  document.getElementById('lblReg').textContent       = t.reg;
+  document.getElementById('lblTot').textContent       = t.tot;
+  document.getElementById('notifTxt').textContent     = notifGranted ? t.notifOn : t.notif;
+  document.getElementById('searchIn').placeholder     = t.ph;
+  document.getElementById('searchBtnEl').textContent  = t.sbtn;
+  document.getElementById('footerL').textContent      = t.footL;
+  document.getElementById('footerR').textContent      = t.footR;
+  document.getElementById('eApp').textContent         = t.eApp;
+  ['z1','z2','z3','z4','z5','z6'].forEach((id,i) => document.getElementById(id).textContent = t.z[i]);
+  ['e1','e2','e3','e4'].forEach((id,i) => document.getElementById(id).textContent = t.e[i]);
+  renderFeed(getFiltered());
+}
+
+// ── FETCH FROM API ──
+async function fetchNews(params='') {
+  try {
+    const res = await fetch(`/api/news?${params}`);
+    const data = await res.json();
+    return data;
+  } catch(e) {
+    console.error('Fetch error:', e);
+    return null;
+  }
+}
+
+async function loadNews() {
+  const data = await fetchNews();
+  if (!data) {
+    document.getElementById('feedList').innerHTML =
+      `<div class="loading"><div class="loading-text" style="color:var(--red)">${T[lang].err}</div></div>`;
+    return;
+  }
+  allArticles = data.articles || [];
+  updateStats(data.stats);
+  updateTicker();
+  renderFeed(getFiltered());
+
+  // התראות על חדשות חדשות
+  const newCritical = allArticles.filter(a => a.level===3 && !seenUrls.has(a.url));
+  newCritical.forEach(a => {
+    seenUrls.add(a.url);
+    const title = a.title || '';
+    if (notifGranted) {
+      new Notification('🔴 ' + T[lang].lvl[3], { body: title, tag: a.url });
+    }
+    if (newCritical[0] === a) showToast(title);
+  });
+  allArticles.forEach(a => seenUrls.add(a.url));
+}
+
+// ── TICKER ──
+function updateTicker() {
+  const items = allArticles.slice(0,8).map(a =>
+    `<span class="ticker-item">${a.title || ''}</span>`
+  ).join('');
+  document.getElementById('ticker').innerHTML = items || '<span class="ticker-item">אין עדכונים</span>';
+}
+
+// ── STATS ──
+function updateStats(stats) {
+  if (!stats) return;
+  const map = {sCrit:'critical', sUrg:'urgent', sReg:'regular', sTot:'total'};
+  Object.entries(map).forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    el.textContent = stats[key] ?? 0;
+    el.classList.add('bump');
+    setTimeout(()=>el.classList.remove('bump'), 250);
+  });
+  const now = new Date();
+  document.getElementById('lastUpd').textContent =
+    `${T[lang].lastUpd}: ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+}
+
+// ── RENDER ──
+function getLvlChip(level) {
+  const t = T[lang];
+  const cls = level===3?'cr':level===2?'co':'cy';
+  return `<span class="chip ${cls}">${t.lvl[level]||''}</span>`;
+}
+const ICONS = { 3:'🚀', 2:'⚠️', 1:'📰' };
+
+function renderFeed(articles) {
+  const list = document.getElementById('feedList');
+  if (!articles.length) {
+    list.innerHTML = `<div class="loading"><div class="loading-text">${T[lang].noRes}</div></div>`;
+    return;
+  }
+  list.innerHTML = '';
+  articles.forEach((a,i) => {
+    const div = document.createElement('div');
+    div.className = `article lv${a.level||1}`;
+    div.style.animationDelay = `${i*.05}s`;
+    const icon = ICONS[a.level] || '📰';
+    const langTag = a.lang==='he'?'עברית':'EN';
+    const time = a.published ? timeAgo(a.published) : '';
+    div.innerHTML = `
+      <div class="a-bar"></div>
+      <div class="a-icon">${icon}</div>
+      <div>
+        <div class="a-top">
+          ${getLvlChip(a.level||1)}
+          <span class="chip cb">${langTag}</span>
+          <span class="a-source">${a.source||''}</span>
+          <span class="a-time">${time}</span>
+        </div>
+        <div class="a-title">${a.title||''}</div>
+        <div class="a-desc">${a.description||''}</div>
+        <a class="a-link" href="${a.url||'#'}" target="_blank" rel="noopener">${T[lang].readMore}</a>
+      </div>`;
+    list.appendChild(div);
+  });
+}
+
+function timeAgo(published) {
+  try {
+    const diff = (Date.now() - new Date(published)) / 60000;
+    if (diff < 1)  return lang==='he'?'עכשיו':'just now';
+    if (diff < 60) return lang==='he'?`לפני ${Math.floor(diff)} דקות`:`${Math.floor(diff)} min ago`;
+    const h = Math.floor(diff/60);
+    return lang==='he'?`לפני ${h} שעות`:`${h} hr ago`;
+  } catch{ return ''; }
+}
+
+// ── FILTER ──
+function getFiltered() {
+  if (filter==='all') return allArticles;
+  return allArticles.filter(a => a.level===parseInt(filter));
+}
+function switchTab(f,btn) {
+  filter = f;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  renderFeed(getFiltered());
+}
+
+// ── SEARCH ──
+async function doSearch() {
+  const q = document.getElementById('searchIn').value.trim();
+  const countEl = document.getElementById('searchCount');
+  if (!q) { renderFeed(getFiltered()); countEl.style.display='none'; return; }
+
+  const data = await fetchNews(`q=${encodeURIComponent(q)}`);
+  const results = data?.articles || [];
+  countEl.textContent = T[lang].found(results.length, q);
+  countEl.style.display = 'block';
+  renderFeed(results);
+}
+
+// ── NOTIFICATIONS ──
+async function requestNotif() {
+  if (!('Notification' in window)) return;
+  const p = await Notification.requestPermission();
+  if (p==='granted') {
+    notifGranted = true;
+    document.getElementById('notifBtn').classList.add('active');
+    document.getElementById('notifTxt').textContent = T[lang].notifOn;
+    new Notification('מצב שטח', { body: 'התראות הופעלו ✓' });
+  }
+}
+
+// ── TOAST ──
+function showToast(msg) {
+  document.getElementById('toastBody').textContent = msg;
+  document.getElementById('toast').classList.add('show');
+  setTimeout(()=>document.getElementById('toast').classList.remove('show'), 7000);
+}
+function closeToast() { document.getElementById('toast').classList.remove('show'); }
+
+// ── INIT & AUTO-REFRESH ──
+if (typeof Notification!=='undefined' && Notification.permission==='granted') {
+  notifGranted = true;
+  document.getElementById('notifBtn').classList.add('active');
+}
+
+loadNews();
+setInterval(loadNews, 5 * 60 * 1000); // כל 5 דקות
+</script>
+</body>
+</html>
